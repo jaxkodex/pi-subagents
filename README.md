@@ -110,7 +110,7 @@ System prompt for the agent goes here.
 - `tools` — restricts the subagent's toolset (comma string or YAML list); omit for all default tools
 - `model` — omitted means the subagent inherits the dispatching session's model and thinking level
 - `fallback_models` — tried in order when `model` is rate-limited or unavailable
-- `thinking` — pi thinking level (`off`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`) the subagent starts with. Invalid values are ignored. It takes precedence over the dispatching session's level, and applies even when `model` is pinned (otherwise a pinned agent keeps its own startup level from settings). Pi clamps the level to what the selected model supports, so `thinking: max` is safe to set on an agent whose model only goes to `high`.
+- `thinking` — pi thinking level (`off`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`) the subagent starts with. Invalid values are ignored. It takes precedence over the dispatching session's level, and applies even when `model` is pinned (otherwise a pinned agent keeps its own startup level from settings). Pi clamps the level to what the selected model supports, so `thinking: max` is safe on a model that only goes to `high` — the subagent result then shows `[thinking: max→high]` instead of silently claiming `max`. A model without reasoning runs at `off`.
 
 Locations:
 

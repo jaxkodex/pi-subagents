@@ -155,8 +155,10 @@ interface SingleResult {
 	stderr: string;
 	usage: UsageStats;
 	model?: string;
-	/** Thinking level the subprocess was started with, when one was applied. */
+	/** Thinking level the subprocess actually ran with (pi clamps it to model support). */
 	thinkingLevel?: ThinkingLevel;
+	/** Thinking level requested via frontmatter/dispatch, before model clamping. */
+	requestedThinkingLevel?: ThinkingLevel;
 	stopReason?: string;
 	errorMessage?: string;
 	/** Set when the primary model failed and a fallback model produced this result. */
@@ -195,6 +197,13 @@ function isRetryableModelFailure(result: SingleResult): boolean {
 	if (!isFailedResult(result)) return false;
 	if (result.stopReason === "aborted") return false;
 	return RETRYABLE_MODEL_ERROR.test(`${result.errorMessage ?? ""}\n${result.stderr}`);
+}
+
+/** Render the applied thinking level, marking it when pi clamped it to the model. */
+function formatThinkingLevel(result: SingleResult): string | undefined {
+	if (!result.thinkingLevel) return undefined;
+	const requested = result.requestedThinkingLevel;
+	return requested && requested !== result.thinkingLevel ? `${requested}→${result.thinkingLevel}` : result.thinkingLevel;
 }
 
 /** Annotate output when a fallback model was used, so model swaps are never silent. */
@@ -365,6 +374,7 @@ async function runSingleAgent(
 				usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 },
 				model,
 				thinkingLevel,
+				requestedThinkingLevel: thinkingLevel,
 				step,
 			};
 
@@ -414,6 +424,8 @@ async function runSingleAgent(
 								currentResult.usage.contextTokens = usage.totalTokens || 0;
 							}
 							if (!currentResult.model && msg.model) currentResult.model = msg.model;
+							// The subprocess reports the clamped level; prefer it over what we requested.
+							if (msg.thinkingLevel) currentResult.thinkingLevel = msg.thinkingLevel;
 							if (msg.stopReason) currentResult.stopReason = msg.stopReason;
 							if (msg.errorMessage) currentResult.errorMessage = msg.errorMessage;
 						}
@@ -865,7 +877,8 @@ export default function (pi: ExtensionAPI) {
 					const container = new Container();
 					let header = `${icon} ${theme.fg("toolTitle", theme.bold(r.agent))}${theme.fg("muted", ` (${r.agentSource})`)}`;
 					if (isError && r.stopReason) header += ` ${theme.fg("error", `[${r.stopReason}]`)}`;
-					if (r.thinkingLevel) header += ` ${theme.fg("muted", `[thinking: ${r.thinkingLevel}]`)}`;
+					const thinking = formatThinkingLevel(r);
+					if (thinking) header += ` ${theme.fg("muted", `[thinking: ${thinking}]`)}`;
 					if (r.fellBackFrom) header += ` ${theme.fg("warning", `[fallback: ${r.fellBackFrom} → ${r.model}]`)}`;
 					container.addChild(new Text(header, 0, 0));
 					if (isError && r.errorMessage)
@@ -903,7 +916,8 @@ export default function (pi: ExtensionAPI) {
 
 				let text = `${icon} ${theme.fg("toolTitle", theme.bold(r.agent))}${theme.fg("muted", ` (${r.agentSource})`)}`;
 				if (isError && r.stopReason) text += ` ${theme.fg("error", `[${r.stopReason}]`)}`;
-				if (r.thinkingLevel) text += ` ${theme.fg("muted", `[thinking: ${r.thinkingLevel}]`)}`;
+				const thinking = formatThinkingLevel(r);
+				if (thinking) text += ` ${theme.fg("muted", `[thinking: ${thinking}]`)}`;
 				if (r.fellBackFrom) text += ` ${theme.fg("warning", `[fallback: ${r.fellBackFrom} → ${r.model}]`)}`;
 				if (isError && r.errorMessage) text += `\n${theme.fg("error", `Error: ${r.errorMessage}`)}`;
 				else if (displayItems.length === 0) text += `\n${theme.fg("muted", "(no output)")}`;
