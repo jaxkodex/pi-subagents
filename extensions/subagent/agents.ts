@@ -4,9 +4,16 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
+import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import { CONFIG_DIR_NAME, getAgentDir, parseFrontmatter } from "@earendil-works/pi-coding-agent";
 
 export type AgentScope = "user" | "project" | "both";
+
+/**
+ * Pi thinking levels, mirroring `ThinkingLevel` from `@earendil-works/pi-agent-core`.
+ * Kept local so agent discovery does not depend on that package exposing a runtime list.
+ */
+export const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
 
 export interface AgentConfig {
 	name: string;
@@ -14,6 +21,8 @@ export interface AgentConfig {
 	tools?: string[];
 	model?: string;
 	fallbackModels?: string[];
+	/** Pi thinking level to start this agent's subprocess with; overrides the dispatcher's level. */
+	thinking?: ThinkingLevel;
 	systemPrompt: string;
 	source: "user" | "project";
 	filePath: string;
@@ -38,6 +47,7 @@ type AgentFrontmatter = {
 	tools?: unknown;
 	model?: unknown;
 	fallback_models?: unknown;
+	thinking?: unknown;
 };
 
 /**
@@ -64,6 +74,18 @@ function parseToolList(value: unknown): string[] | undefined {
 /** Same normalization as parseToolList: accepts a YAML list or comma string. */
 function parseModelList(value: unknown): string[] | undefined {
 	return parseToolList(value);
+}
+
+/**
+ * Normalize a frontmatter `thinking` value to a Pi thinking level.
+ *
+ * Unknown values (typos, numbers, maps) yield `undefined` rather than throwing,
+ * matching parseToolList: one bad agent file must not break discovery.
+ */
+function parseThinkingLevel(value: unknown): ThinkingLevel | undefined {
+	if (typeof value !== "string") return undefined;
+	const level = value.trim().toLowerCase();
+	return (THINKING_LEVELS as readonly string[]).includes(level) ? (level as ThinkingLevel) : undefined;
 }
 
 function loadAgentsFromDir(dir: string, source: "user" | "project"): AgentConfig[] {
@@ -104,6 +126,7 @@ function loadAgentsFromDir(dir: string, source: "user" | "project"): AgentConfig
 			tools: parseToolList(frontmatter.tools),
 			model: typeof frontmatter.model === "string" ? frontmatter.model : undefined,
 			fallbackModels: parseModelList(frontmatter.fallback_models),
+			thinking: parseThinkingLevel(frontmatter.thinking),
 			systemPrompt: body,
 			source,
 			filePath,

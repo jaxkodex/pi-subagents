@@ -155,6 +155,8 @@ interface SingleResult {
 	stderr: string;
 	usage: UsageStats;
 	model?: string;
+	/** Thinking level the subprocess was started with, when one was applied. */
+	thinkingLevel?: ThinkingLevel;
 	stopReason?: string;
 	errorMessage?: string;
 	/** Set when the primary model failed and a fallback model produced this result. */
@@ -318,6 +320,10 @@ async function runSingleAgent(
 
 	const inheritsDispatchConfig = !agent.model;
 	const primaryModel = agent.model ?? dispatchDefaults.model;
+	// Agent frontmatter wins; otherwise an agent that pins no model inherits the dispatcher's level.
+	// A pinned model without a `thinking` value gets no --thinking flag, so the subprocess keeps
+	// its own startup level (settings `modelThinkingLevels` / `defaultThinkingLevel`).
+	const thinkingLevel = agent.thinking ?? (inheritsDispatchConfig ? dispatchDefaults.thinkingLevel : undefined);
 	// Ordered candidates: agent's own model, agent fallback_models frontmatter, then dispatch-level modelFallbacks.
 	const modelCandidates: (string | undefined)[] = [
 		primaryModel,
@@ -343,8 +349,8 @@ async function runSingleAgent(
 		for (const model of modelCandidates) {
 			const args: string[] = ["--mode", "json", "-p", "--no-session"];
 			if (model) args.push("--model", model);
-			if (inheritsDispatchConfig && dispatchDefaults.thinkingLevel) {
-				args.push("--thinking", dispatchDefaults.thinkingLevel);
+			if (thinkingLevel) {
+				args.push("--thinking", thinkingLevel);
 			}
 			if (agent.tools && agent.tools.length > 0) args.push("--tools", agent.tools.join(","));
 			if (tmpPromptPath) args.push("--append-system-prompt", tmpPromptPath);
@@ -358,6 +364,7 @@ async function runSingleAgent(
 				stderr: "",
 				usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 },
 				model,
+				thinkingLevel,
 				step,
 			};
 
@@ -858,6 +865,7 @@ export default function (pi: ExtensionAPI) {
 					const container = new Container();
 					let header = `${icon} ${theme.fg("toolTitle", theme.bold(r.agent))}${theme.fg("muted", ` (${r.agentSource})`)}`;
 					if (isError && r.stopReason) header += ` ${theme.fg("error", `[${r.stopReason}]`)}`;
+					if (r.thinkingLevel) header += ` ${theme.fg("muted", `[thinking: ${r.thinkingLevel}]`)}`;
 					if (r.fellBackFrom) header += ` ${theme.fg("warning", `[fallback: ${r.fellBackFrom} → ${r.model}]`)}`;
 					container.addChild(new Text(header, 0, 0));
 					if (isError && r.errorMessage)
@@ -895,6 +903,7 @@ export default function (pi: ExtensionAPI) {
 
 				let text = `${icon} ${theme.fg("toolTitle", theme.bold(r.agent))}${theme.fg("muted", ` (${r.agentSource})`)}`;
 				if (isError && r.stopReason) text += ` ${theme.fg("error", `[${r.stopReason}]`)}`;
+				if (r.thinkingLevel) text += ` ${theme.fg("muted", `[thinking: ${r.thinkingLevel}]`)}`;
 				if (r.fellBackFrom) text += ` ${theme.fg("warning", `[fallback: ${r.fellBackFrom} → ${r.model}]`)}`;
 				if (isError && r.errorMessage) text += `\n${theme.fg("error", `Error: ${r.errorMessage}`)}`;
 				else if (displayItems.length === 0) text += `\n${theme.fg("muted", "(no output)")}`;

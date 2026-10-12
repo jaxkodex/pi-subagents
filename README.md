@@ -101,6 +101,7 @@ description: What this agent does
 tools: read, grep, find, ls
 model: claude-haiku-4-5
 fallback_models: [provider/other-model]
+thinking: high
 ---
 
 System prompt for the agent goes here.
@@ -109,6 +110,7 @@ System prompt for the agent goes here.
 - `tools` — restricts the subagent's toolset (comma string or YAML list); omit for all default tools
 - `model` — omitted means the subagent inherits the dispatching session's model and thinking level
 - `fallback_models` — tried in order when `model` is rate-limited or unavailable
+- `thinking` — pi thinking level (`off`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`) the subagent starts with. Invalid values are ignored. It takes precedence over the dispatching session's level, and applies even when `model` is pinned (otherwise a pinned agent keeps its own startup level from settings). Pi clamps the level to what the selected model supports, so `thinking: max` is safe to set on an agent whose model only goes to `high`.
 
 Locations:
 
